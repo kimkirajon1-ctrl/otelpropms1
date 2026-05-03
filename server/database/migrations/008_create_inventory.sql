@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS inventory (
+    id SERIAL PRIMARY KEY,
+    item_name VARCHAR(100) NOT NULL,
+    category VARCHAR(50), -- AMENITY, LINEN, CLEANING_SUPPLY
+    quantity INTEGER DEFAULT 0,
+    min_stock_level INTEGER DEFAULT 5,
+    unit_price DECIMAL(10, 2),
+    last_restocked TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
