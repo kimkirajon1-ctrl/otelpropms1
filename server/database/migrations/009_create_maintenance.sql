@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS maintenance_requests (
+    id SERIAL PRIMARY KEY,
+    room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE,
+    reported_by INTEGER REFERENCES users(id),
+    issue_description TEXT NOT NULL,
+    priority VARCHAR(20) DEFAULT 'NORMAL', -- LOW, NORMAL, URGENT
+    status VARCHAR(20) DEFAULT 'OPEN', -- OPEN, IN_REPAIR, CLOSED
+    assigned_to VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
