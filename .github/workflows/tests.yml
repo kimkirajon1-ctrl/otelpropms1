@@ -1,0 +1,296 @@
+name: Tests & Quality Checks
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 2 * * *' # Günlük saat 2'de çalış
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: hotel_pms_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./server
+        run: npm ci
+
+      - name: Setup test database
+        working-directory: ./server
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/hotel_pms_test
+          NODE_ENV: test
+        run: |
+          npm run migrate
+          npm run seed:test
+
+      - name: Run unit tests
+        working-directory: ./server
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/hotel_pms_test
+          NODE_ENV: test
+          JWT_SECRET: test_secret_key_12345
+          JWT_REFRESH_SECRET: test_refresh_secret_12345
+        run: npm run test:unit
+
+      - name: Generate coverage report
+        working-directory: ./server
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/hotel_pms_test
+          NODE_ENV: test
+          JWT_SECRET: test_secret_key_12345
+          JWT_REFRESH_SECRET: test_refresh_secret_12345
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./server/coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+
+  integration-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: hotel_pms_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./server
+        run: npm ci
+
+      - name: Setup test database
+        working-directory: ./server
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/hotel_pms_test
+          NODE_ENV: test
+        run: npm run migrate
+
+      - name: Run integration tests
+        working-directory: ./server
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/hotel_pms_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+          JWT_SECRET: test_secret_key_12345
+          JWT_REFRESH_SECRET: test_refresh_secret_12345
+        run: npm run test:integration
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./client
+        run: npm ci
+
+      - name: Run unit tests
+        working-directory: ./client
+        run: npm run test:unit
+
+      - name: Run E2E tests
+        working-directory: ./client
+        run: npm run test:e2e
+
+      - name: Build for production
+        working-directory: ./client
+        env:
+          VITE_API_URL: http://localhost:3000/api
+        run: npm run build
+
+  code-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install server dependencies
+        working-directory: ./server
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./server
+        run: npm run lint
+
+      - name: Check formatting with Prettier
+        working-directory: ./server
+        run: npm run format:check
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  dependency-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run npm audit
+        working-directory: ./server
+        run: |
+          npm audit --audit-level=moderate || true
+
+      - name: Check for outdated packages
+        working-directory: ./server
+        run: npm outdated || true
+
+      - name: OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'Hotel-PMS'
+          path: '.'
+          format: 'JSON'
+          args: >
+            --enableExperimental
+            --enableRetired
+
+      - name: Upload results to GitHub
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: reports/dependency-check-report.sarif
+        if: always()
+
+  performance-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: hotel_pms_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./server
+        run: npm ci
+
+      - name: Setup test database
+        working-directory: ./server
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/hotel_pms_test
+        run: npm run migrate
+
+      - name: Run performance tests
+        working-directory: ./server
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/hotel_pms_test
+          NODE_ENV: test
+        run: npm run test:performance
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const results = fs.readFileSync('./server/performance-results.json', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## Performance Test Results\n```json\n' + results + '\n```'
+            });
