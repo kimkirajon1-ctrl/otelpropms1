@@ -1,0 +1,25 @@
+:root {
+  /* Ana Renkler - Otel Kurumsal Kimliği */
+  --primary-color: #1e3a8a;    /* Koyu Mavi - Güven */
+  --secondary-color: #3b82f6;  /* Canlı Mavi - Aksiyon */
+  --accent-color: #f59e0b;     /* Kehribar - Uyarı/Dikkat */
+  
+  /* Durum Renkleri */
+  --success: #10b981;          /* Temiz / Check-in */
+  --danger: #ef4444;           /* Bakım / İptal */
+  --warning: #facc15;          /* Kirli */
+  --info: #06b6d4;             /* Bilgi */
+
+  /* Arka Plan ve Metin */
+  --bg-main: #f8fafc;
+  --bg-sidebar: #0f172a;
+  --text-main: #1e293b;
+  --text-muted: #64748b;
+  --white: #ffffff;
+  
+  /* Gölgeler ve Kenarlıklar */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+  --border-radius: 8px;
+  --sidebar-width: 260px;
+}
